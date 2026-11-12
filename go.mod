@@ -2,6 +2,9 @@ module x-ui
 
 go 1.24.4
 
+// Build with a patched toolchain while retaining Go 1.24 module compatibility.
+toolchain go1.27.4
+
 require (
 	github.com/gin-contrib/gzip v1.2.3
 	github.com/gin-contrib/sessions v1.0.4

@@ -2,6 +2,8 @@ package database
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"io"
 	"io/fs"
 	"log"
@@ -21,10 +23,7 @@ import (
 
 var db *gorm.DB
 
-const (
-	defaultUsername = "admin"
-	defaultPassword = "admin"
-)
+const defaultUsername = "admin"
 
 func initModels() error {
 	models := []any{
@@ -52,18 +51,28 @@ func initUser() error {
 		return err
 	}
 	if empty {
-		hashedPassword, err := crypto.HashPasswordAsBcrypt(defaultPassword)
-
-		if err != nil {
-			log.Printf("Error hashing default password: %v", err)
+		// Every fresh installation gets a unique, cryptographically random password.
+		// Existing users are never changed by this migration.
+		secret := make([]byte, 24)
+		if _, err := rand.Read(secret); err != nil {
 			return err
 		}
-
+		initialPassword := base64.RawURLEncoding.EncodeToString(secret)
+		hashedPassword, err := crypto.HashPasswordAsBcrypt(initialPassword)
+		if err != nil {
+			return err
+		}
 		user := &model.User{
 			Username: defaultUsername,
 			Password: hashedPassword,
 		}
-		return db.Create(user).Error
+		if err := db.Create(user).Error; err != nil {
+			return err
+		}
+		log.Printf("New 3x-ui installation; initial username: %s", defaultUsername)
+		log.Printf("New 3x-ui installation; initial password (shown once): %s", initialPassword)
+		log.Print("Secure these logs and change the initial password after login.")
+		return nil
 	}
 	return nil
 }

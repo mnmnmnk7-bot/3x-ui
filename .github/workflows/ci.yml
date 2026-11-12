@@ -25,6 +25,14 @@ jobs:
         with:
           go-version: '1.27.4'
           cache: true
+      - name: Verify installer shell syntax and fork URLs
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          if grep -nE 'github.com/xeefei/3x-ui|raw.githubusercontent.com/xeefei/3x-ui|api.github.com/repos/xeefei/3x-ui' install.sh x-ui.sh; then
+            echo "Old upstream installer URL found" >&2
+            exit 1
+          fi
       - name: Confirm toolchain
         run: go version
       - name: Run unit tests

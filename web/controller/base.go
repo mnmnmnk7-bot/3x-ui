@@ -2,6 +2,8 @@ package controller
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 
 	"x-ui/logger"
 	"x-ui/web/locale"
@@ -13,6 +15,18 @@ import (
 type BaseController struct{}
 
 func (a *BaseController) checkLogin(c *gin.Context) {
+	// Browser-originated cross-site mutations are not allowed.
+	// Requests without an Origin header (e.g. existing API clients) retain
+	// compatibility; SameSite=Lax protects standard browser sessions.
+	if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead && c.Request.Method != http.MethodOptions {
+		if origin := c.GetHeader("Origin"); origin != "" {
+			parsed, err := url.Parse(origin)
+			if err != nil || parsed.Host == "" || !strings.EqualFold(parsed.Host, c.Request.Host) || (c.Request.TLS != nil && parsed.Scheme != "https") {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
+		}
+	}
 	if !session.IsLogin(c) {
 		if isAjax(c) {
 			pureJsonMsg(c, http.StatusUnauthorized, false, I18nWeb(c, "pages.login.loginAgain"))

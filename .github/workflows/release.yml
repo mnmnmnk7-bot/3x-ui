@@ -2,8 +2,6 @@ name: Build and Release 3x-ui
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths: ['go.mod', 'go.sum', '**/*.go', 'DockerInit.sh', '.github/workflows/release.yml']
   push:
     branches: [main]
     tags: ['v*']
@@ -26,14 +24,12 @@ env:
 
 jobs:
   build:
-    # Fork PRs must not execute code on a self-hosted runner.
-    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login == github.repository_owner)
     runs-on: self-hosted
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(github.event_name == 'pull_request' && '["amd64","arm64"]' || '["amd64","arm64","armv7","armv6","armv5","386","s390x"]') }}
+        platform: [amd64, arm64, armv7, armv6, armv5, '386', s390x]
     steps:
       - uses: actions/checkout@v4
         with:

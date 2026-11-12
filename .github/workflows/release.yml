@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   release:
     types: [published]
+  pull_request:
+    paths: ['go.mod', 'go.sum', '**/*.go', 'DockerInit.sh', '.github/workflows/release.yml']
   push:
     branches: [main]
     paths:
@@ -30,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [amd64, arm64, armv7, armv6, armv5, '386', s390x]
+        platform: ${{ fromJSON(github.event_name == 'pull_request' && '["amd64","arm64"]' || '["amd64","arm64","armv7","armv6","armv5","386","s390x"]') }}
     steps:
       - uses: actions/checkout@v4
         with:

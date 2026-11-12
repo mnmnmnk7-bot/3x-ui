@@ -1,9 +1,10 @@
 # ========================================================
 # Stage: Builder
 # ========================================================
-FROM golang:1.24-alpine AS builder
+FROM golang:1.27.4-alpine AS builder
 WORKDIR /app
 ARG TARGETARCH
+ARG XRAY_VERSION=v26.11.9
 
 RUN apk --no-cache --update add \
   build-base \
@@ -16,7 +17,7 @@ COPY . .
 ENV CGO_ENABLED=1
 ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 RUN go build -ldflags "-w -s" -o build/x-ui main.go
-RUN ./DockerInit.sh "$TARGETARCH"
+RUN sh ./DockerInit.sh "$TARGETARCH" "$XRAY_VERSION"
 
 # ========================================================
 # Stage: Final Image of 3x-ui

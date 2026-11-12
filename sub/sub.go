@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"x-ui/config"
 	"x-ui/logger"
@@ -170,13 +171,14 @@ func (s *Server) Start() (err error) {
 		if err == nil {
 			c := &tls.Config{
 				Certificates: []tls.Certificate{cert},
+				MinVersion: tls.VersionTLS12,
 			}
 			listener = network.NewAutoHttpsListener(listener)
 			listener = tls.NewListener(listener, c)
 			logger.Info("Sub server running HTTPS on", listener.Addr())
 		} else {
-			logger.Error("Error loading certificates:", err)
-			logger.Info("Sub server running HTTP on", listener.Addr())
+			listener.Close()
+			return err // Fail closed: never downgrade a configured HTTPS subscription listener.
 		}
 	} else {
 		logger.Info("Sub server running HTTP on", listener.Addr())
@@ -185,6 +187,9 @@ func (s *Server) Start() (err error) {
 
 	s.httpServer = &http.Server{
 		Handler: engine,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout: 120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	go func() {

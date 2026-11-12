@@ -2,6 +2,7 @@ package service
 
 import (
 	_ "embed"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +15,6 @@ import (
 	"x-ui/database/model"
 	"x-ui/logger"
 	"x-ui/util/common"
-	"x-ui/util/random"
 	"x-ui/util/reflect_util"
 	"x-ui/web/entity"
 	"x-ui/xray"
@@ -30,7 +30,7 @@ var defaultValueMap = map[string]string{
 	"webPort":                     "2053",
 	"webCertFile":                 "",
 	"webKeyFile":                  "",
-	"secret":                      random.Seq(32),
+	"secret":                      rand.Text(),
 	"webBasePath":                 "/",
 	"sessionMaxAge":               "60",
 	"pageSize":                    "50",

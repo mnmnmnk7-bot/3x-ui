@@ -157,6 +157,12 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine := gin.Default()
+	engine.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Next()
+	})
 
 	webDomain, err := s.settingService.GetWebDomain()
 	if err != nil {
@@ -180,6 +186,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	assetsBasePath := basePath + "assets/"
 
 	store := cookie.NewStore(secret)
+	store.Options(sessions.Options{Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	engine.Use(sessions.Sessions("3x-ui", store))
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
@@ -341,13 +348,14 @@ func (s *Server) Start() (err error) {
 		if err == nil {
 			c := &tls.Config{
 				Certificates: []tls.Certificate{cert},
+				MinVersion: tls.VersionTLS12,
 			}
 			listener = network.NewAutoHttpsListener(listener)
 			listener = tls.NewListener(listener, c)
 			logger.Info("Web server running HTTPS on", listener.Addr())
 		} else {
-			logger.Error("Error loading certificates:", err)
-			logger.Info("Web server running HTTP on", listener.Addr())
+			listener.Close()
+			return err // Fail closed: never downgrade a configured HTTPS panel.
 		}
 	} else {
 		logger.Info("Web server running HTTP on", listener.Addr())
@@ -356,6 +364,9 @@ func (s *Server) Start() (err error) {
 
 	s.httpServer = &http.Server{
 		Handler: engine,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout: 120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	go func() {

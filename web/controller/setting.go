@@ -4,11 +4,14 @@ import (
 	"errors"
 	"time"
 
+	"x-ui/database"
+	"x-ui/database/model"
 	"x-ui/util/crypto"
 	"x-ui/web/entity"
 	"x-ui/web/service"
 	"x-ui/web/session"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
@@ -89,9 +92,14 @@ func (a *SettingController) updateUser(c *gin.Context) {
 	}
 	err = a.userService.UpdateUser(user.Id, form.NewUsername, form.NewPassword)
 	if err == nil {
-		user.Username = form.NewUsername
-		user.Password, _ = crypto.HashPasswordAsBcrypt(form.NewPassword)
-		session.SetLoginUser(c, user)
+		// The session token must be based on the exact bcrypt hash committed to
+		// the database, not a second independently salted bcrypt invocation.
+		currentUser := &model.User{}
+		err = database.GetDB().First(currentUser, user.Id).Error
+		if err == nil {
+			session.SetLoginUser(c, currentUser)
+			err = sessions.Default(c).Save()
+		}
 	}
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifyUser"), err)
 }

@@ -1,0 +1,60 @@
+{
+  "backed_up_at": "2026-11-12",
+  "original_repository": "mnmnmnk7-bot/3x-ui",
+  "pull_request_number": 4,
+  "pr_url": "https://github.com/mnmnmnk7-bot/3x-ui/pull/4",
+  "title": "security: harden 3x-ui sessions, TLS downgrade, 2FA and HTTP protections",
+  "state": "open",
+  "draft": true,
+  "merged": false,
+  "base_ref": "main",
+  "base_sha_at_backup": "4f92836f134f566af493926c671735f76cf706f3",
+  "original_head_branch": "hardening/self-hosted-security-audit-2026-11",
+  "original_head_sha": "1c656e3cf0ace03902454dae00daeec3584d9206",
+  "backup_exact_branch": "backup/pr-4-security-hardening-2026-11-12",
+  "backup_archive_branch": "backup/pr-4-archive-2026-11-12",
+  "changed_files": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/docker.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/security.yml",
+    "SECURITY_REVIEW_2026.md",
+    "SELF_HOSTED_SECURITY.md",
+    "sub/sub.go",
+    "web/controller/base.go",
+    "web/controller/setting.go",
+    "web/service/setting.go",
+    "web/service/user.go",
+    "web/session/session.go",
+    "web/session/session_test.go",
+    "web/web.go"
+  ],
+  "commits": [
+    {
+      "sha": "4a8612b0c296ecf07f1d79908e7cc31230417dc0",
+      "subject": "ci: migrate every job to self-hosted with fork-PR protections and runner security guide",
+      "date": "2026-11-12T09:07:04Z"
+    },
+    {
+      "sha": "6e70d2af2d0ab2e621e930d7cb966b7211563a6c",
+      "subject": "security: harden session cookie, origin checks, cryptographic secret, HTTPS fail-closed and server timeouts",
+      "date": "2026-11-12T09:08:17Z"
+    },
+    {
+      "sha": "f2c18e16252cc202c83420d3b1446103f3e3b9e1",
+      "subject": "test: assert minimal session token and password-change revocation",
+      "date": "2026-11-12T09:10:08Z"
+    },
+    {
+      "sha": "2c83555c09c13f0ee4b553f7ec4986058f8c7e73",
+      "subject": "ci: only owner-authored same-repo PRs may use self-hosted runners",
+      "date": "2026-11-12T09:11:24Z"
+    },
+    {
+      "sha": "1c656e3cf0ace03902454dae00daeec3584d9206",
+      "subject": "security: retain 2FA after password change and align PR with safe self-hosted workflows",
+      "date": "2026-11-12T09:17:41Z"
+    }
+  ],
+  "discussion": []
+}

@@ -1,0 +1,627 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index b7b05ac2..f4c0f318 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1,7 +1,6 @@
+ name: Go CI
+ 
+ on:
+-  pull_request:
+   push:
+     branches: [main]
+   workflow_dispatch:
+@@ -15,7 +14,7 @@ concurrency:
+ 
+ jobs:
+   build-and-test:
+-    runs-on: ubuntu-24.04
++    runs-on: self-hosted
+     timeout-minutes: 35
+     steps:
+       - uses: actions/checkout@v4
+diff --git a/.github/workflows/docker.yml b/.github/workflows/docker.yml
+index 319fc929..5ce6df81 100644
+--- a/.github/workflows/docker.yml
++++ b/.github/workflows/docker.yml
+@@ -5,8 +5,6 @@ on:
+     branches: [main]
+     tags: ['v*']
+   workflow_dispatch:
+-  pull_request:
+-    paths: ['Dockerfile', 'DockerInit.sh', 'go.mod', 'go.sum', '**/*.go', '.github/workflows/docker.yml']
+ 
+ permissions:
+   contents: read
+@@ -18,7 +16,7 @@ concurrency:
+ 
+ jobs:
+   publish:
+-    runs-on: ubuntu-24.04
++    runs-on: self-hosted
+     timeout-minutes: 90
+     steps:
+       - name: Checkout
+@@ -30,7 +28,6 @@ jobs:
+       - name: Setup Buildx
+         uses: docker/setup-buildx-action@v3
+       - name: Authenticate to GHCR
+-        if: github.event_name != 'pull_request'
+         uses: docker/login-action@v3
+         with:
+           registry: ghcr.io
+@@ -49,7 +46,7 @@ jobs:
+         uses: docker/build-push-action@v6
+         with:
+           context: .
+-          push: ${{ github.event_name != 'pull_request' }}
++          push: true
+           platforms: linux/amd64,linux/arm64
+           tags: ${{ steps.meta.outputs.tags }}
+           labels: ${{ steps.meta.outputs.labels }}
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 3b97eed2..d846ea97 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -2,8 +2,6 @@ name: Build and Release 3x-ui
+ 
+ on:
+   workflow_dispatch:
+-  pull_request:
+-    paths: ['go.mod', 'go.sum', '**/*.go', 'DockerInit.sh', '.github/workflows/release.yml']
+   push:
+     branches: [main]
+     tags: ['v*']
+@@ -26,12 +24,12 @@ env:
+ 
+ jobs:
+   build:
+-    runs-on: ubuntu-24.04
++    runs-on: self-hosted
+     timeout-minutes: 90
+     strategy:
+       fail-fast: false
+       matrix:
+-        platform: ${{ fromJSON(github.event_name == 'pull_request' && '["amd64","arm64"]' || '["amd64","arm64","armv7","armv6","armv5","386","s390x"]') }}
++        platform: [amd64, arm64, armv7, armv6, armv5, '386', s390x]
+     steps:
+       - uses: actions/checkout@v4
+         with:
+@@ -104,7 +102,7 @@ jobs:
+   publish:
+     if: github.event_name == 'push'
+     needs: build
+-    runs-on: ubuntu-24.04
++    runs-on: self-hosted
+     permissions:
+       contents: write
+     steps:
+diff --git a/.github/workflows/security.yml b/.github/workflows/security.yml
+index e8113f90..685ffb56 100644
+--- a/.github/workflows/security.yml
++++ b/.github/workflows/security.yml
+@@ -1,7 +1,8 @@
+ name: Go Vulnerability Scan
+ 
+ on:
+-  pull_request:
++  push:
++    branches: [main]
+     paths:
+       - 'go.mod'
+       - 'go.sum'
+@@ -15,7 +16,7 @@ permissions:
+ 
+ jobs:
+   govulncheck:
+-    runs-on: ubuntu-24.04
++    runs-on: self-hosted
+     timeout-minutes: 35
+     steps:
+       - uses: actions/checkout@v4
+diff --git a/SECURITY_REVIEW_2026.md b/SECURITY_REVIEW_2026.md
+new file mode 100644
+index 00000000..57eadf9a
+--- /dev/null
++++ b/SECURITY_REVIEW_2026.md
+@@ -0,0 +1,30 @@
++# 3x-ui security re-review (2026-11-12)
++
++This is a static code review, not a completed penetration test. The existing README remains unchanged.
++
++## Hardening in this draft branch, not yet deployed
++- Cookie session no longer contains the full user record / bcrypt hash; uses a minimal ID and credential-revision fingerprint. A password change invalidates other sessions; existing cookies require re-login.
++- HttpOnly + SameSite=Lax cookie flags; Secure on direct HTTPS. Behind a reverse proxy, enforce HTTPS and verify cookie security.
++- Authenticated routes check cross-origin request Origin when supplied.
++- Cryptographically secure default session signing key via `crypto/rand.Text()`.
++- Both panel and subscription listeners fail closed when configured TLS credentials cannot be loaded, instead of falling back to plaintext HTTP.
++- Response headers (nosniff, deny iframe, no-referrer) and HTTP ReadHeaderTimeout / IdleTimeout limits.
++- Password/username updates preserve the existing 2FA requirement.
++- Regression test for minimal session tokens and password-change revocation.
++
++## Open risks not fixed in this draft
++- **High:** self-hosted runners on a *public* repo can be compromised by untrusted code. Workflows now have NO pull_request triggers, but use branch protections, restrict write permissions, and use disposable isolation.
++- **Medium-high:** `install.sh` downloads release tarballs as root without checking published SHA256SUMS or signed provenance before replacing the installation. Verify and back up prior to install.
++- **Medium-high:** `web/service/server.go` can download and replace Xray executables via authenticated admin endpoints without a verified signature; administrators should not accept arbitrary unreviewed versions.
++- **Medium:** optional menu actions in `x-ui.sh` use downloaded shell code (`curl | bash`, etc.). Do not run without auditing those upstream scripts.
++- **Medium:** panel login lacks a dedicated rate limiter; isolate access by VPN/ACL or trusted reverse-proxy rate limits.
++- **Medium:** `getRemoteIp` and subscription host derivation trust forwarded headers without an explicit trusted-proxy allowlist; external callers can spoof header values.
++- **Medium:** authenticated SQLite DB import lacks a clear upload size bound; may consume excessive memory/storage and needs a robust rollback test.
++- **Medium:** vendored JS and unpinned third-party GitHub Actions require separate supply-chain review.
++- A previous `govulncheck` reported zero *reachable* vulnerabilities, not proof that no security bugs exist.
++
++## Acceptance
++Run Go tests, vet, build and govulncheck on an isolated self-hosted runner; test login, logout, existing cookies, password reset, 2FA, TLS, reverse proxy, subscriptions and Xray traffic on a staging VPS. Back up `/etc/x-ui` before deployment.
++
++Official self-hosted security guidance:
++https://docs.github.com/en/actions/reference/security/secure-use
+diff --git a/SELF_HOSTED_SECURITY.md b/SELF_HOSTED_SECURITY.md
+new file mode 100644
+index 00000000..51274c7c
+--- /dev/null
++++ b/SELF_HOSTED_SECURITY.md
+@@ -0,0 +1,26 @@
++# Self-hosted GitHub Actions runners
++
++All workflow jobs use `runs-on: self-hosted`.
++
++**This is a public repository.** Do not execute untrusted pull-request code on a persistent self-hosted runner. GitHub and OWASP both warn that a PR can modify the workflow itself, bypassing job-level guards.
++
++## Trigger policy
++
++- No workflow has the `pull_request` or `pull_request_target` trigger.
++- Only pushes to protected `main`, matching release tags, manually approved `workflow_dispatch`, and the scheduled security scan can run.
++- The Go security scan also runs for `main` pushes that modify Go dependencies.
++- To validate an owner-created feature branch before merge, explicitly dispatch a workflow on that trusted branch. **Do not** dispatch unreviewed external PR code.
++- This workflow policy does not replace repository Actions settings, branch protection, contributor approval, or runner-group access controls.
++
++## Runner requirements
++
++- Dedicated, disposable Ubuntu 24.04 x86-64 Linux VM; do not reuse a workstation or production host.
++- Git, Bash, Go (or setup-go), Docker/Buildx/QEMU, curl, wget, tar, unzip, sudo and apt-get / cross-compilers.
++- A single runner queues the seven architecture Release matrix jobs sequentially; the Docker build consumes significant disk and RAM.
++- Release packaging uses Ubuntu `apt-get`, and Docker workflow needs access to the Docker daemon. Treat these as elevated privileges.
++- Protect the default branch, tags and workflow file changes. Never share runner host SSH keys, unrestricted production networking, credentials, PATs, or SSH agents with jobs.
++- Prefer ephemeral one-job runners in isolated VMs; destroy state, including Docker layers and volumes, after each job.
++- If no self-hosted runner is online, workflows remain queued. Do not interpret this as a successful build or security check.
++
++Official GitHub guidance: https://docs.github.com/en/actions/reference/security/secure-use
++OWASP checklist: https://cheatsheetseries.owasp.org/cheatsheets/GitHub_Actions_Security_Cheat_Sheet.html
+diff --git a/sub/sub.go b/sub/sub.go
+index 4f8f5672..7f4be30b 100644
+--- a/sub/sub.go
++++ b/sub/sub.go
+@@ -7,6 +7,7 @@ import (
+ 	"net"
+ 	"net/http"
+ 	"strconv"
++	"time"
+ 
+ 	"x-ui/config"
+ 	"x-ui/logger"
+@@ -170,13 +171,14 @@ func (s *Server) Start() (err error) {
+ 		if err == nil {
+ 			c := &tls.Config{
+ 				Certificates: []tls.Certificate{cert},
++				MinVersion: tls.VersionTLS12,
+ 			}
+ 			listener = network.NewAutoHttpsListener(listener)
+ 			listener = tls.NewListener(listener, c)
+ 			logger.Info("Sub server running HTTPS on", listener.Addr())
+ 		} else {
+-			logger.Error("Error loading certificates:", err)
+-			logger.Info("Sub server running HTTP on", listener.Addr())
++			listener.Close()
++			return err // Fail closed: never downgrade a configured HTTPS subscription listener.
+ 		}
+ 	} else {
+ 		logger.Info("Sub server running HTTP on", listener.Addr())
+@@ -185,6 +187,9 @@ func (s *Server) Start() (err error) {
+ 
+ 	s.httpServer = &http.Server{
+ 		Handler: engine,
++		ReadHeaderTimeout: 10 * time.Second,
++		IdleTimeout: 120 * time.Second,
++		MaxHeaderBytes: 1 << 20,
+ 	}
+ 
+ 	go func() {
+diff --git a/web/controller/base.go b/web/controller/base.go
+index 492fc2dc..f3db1378 100644
+--- a/web/controller/base.go
++++ b/web/controller/base.go
+@@ -2,6 +2,8 @@ package controller
+ 
+ import (
+ 	"net/http"
++	"net/url"
++	"strings"
+ 
+ 	"x-ui/logger"
+ 	"x-ui/web/locale"
+@@ -13,6 +15,18 @@ import (
+ type BaseController struct{}
+ 
+ func (a *BaseController) checkLogin(c *gin.Context) {
++	// Browser-originated cross-site mutations are not allowed.
++	// Requests without an Origin header (e.g. existing API clients) retain
++	// compatibility; SameSite=Lax protects standard browser sessions.
++	if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead && c.Request.Method != http.MethodOptions {
++		if origin := c.GetHeader("Origin"); origin != "" {
++			parsed, err := url.Parse(origin)
++			if err != nil || parsed.Host == "" || !strings.EqualFold(parsed.Host, c.Request.Host) || (c.Request.TLS != nil && parsed.Scheme != "https") {
++				c.AbortWithStatus(http.StatusForbidden)
++				return
++			}
++		}
++	}
+ 	if !session.IsLogin(c) {
+ 		if isAjax(c) {
+ 			pureJsonMsg(c, http.StatusUnauthorized, false, I18nWeb(c, "pages.login.loginAgain"))
+diff --git a/web/controller/setting.go b/web/controller/setting.go
+index ddd9f55a..30ab4b74 100644
+--- a/web/controller/setting.go
++++ b/web/controller/setting.go
+@@ -4,11 +4,14 @@ import (
+ 	"errors"
+ 	"time"
+ 
++	"x-ui/database"
++	"x-ui/database/model"
+ 	"x-ui/util/crypto"
+ 	"x-ui/web/entity"
+ 	"x-ui/web/service"
+ 	"x-ui/web/session"
+ 
++	"github.com/gin-contrib/sessions"
+ 	"github.com/gin-gonic/gin"
+ )
+ 
+@@ -89,9 +92,14 @@ func (a *SettingController) updateUser(c *gin.Context) {
+ 	}
+ 	err = a.userService.UpdateUser(user.Id, form.NewUsername, form.NewPassword)
+ 	if err == nil {
+-		user.Username = form.NewUsername
+-		user.Password, _ = crypto.HashPasswordAsBcrypt(form.NewPassword)
+-		session.SetLoginUser(c, user)
++		// The session token must be based on the exact bcrypt hash committed to
++		// the database, not a second independently salted bcrypt invocation.
++		currentUser := &model.User{}
++		err = database.GetDB().First(currentUser, user.Id).Error
++		if err == nil {
++			session.SetLoginUser(c, currentUser)
++			err = sessions.Default(c).Save()
++		}
+ 	}
+ 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifyUser"), err)
+ }
+diff --git a/web/service/setting.go b/web/service/setting.go
+index 868d55bc..6e2a6d05 100644
+--- a/web/service/setting.go
++++ b/web/service/setting.go
+@@ -2,6 +2,7 @@ package service
+ 
+ import (
+ 	_ "embed"
++	"crypto/rand"
+ 	"encoding/json"
+ 	"errors"
+ 	"fmt"
+@@ -14,7 +15,6 @@ import (
+ 	"x-ui/database/model"
+ 	"x-ui/logger"
+ 	"x-ui/util/common"
+-	"x-ui/util/random"
+ 	"x-ui/util/reflect_util"
+ 	"x-ui/web/entity"
+ 	"x-ui/xray"
+@@ -30,7 +30,7 @@ var defaultValueMap = map[string]string{
+ 	"webPort":                     "2053",
+ 	"webCertFile":                 "",
+ 	"webKeyFile":                  "",
+-	"secret":                      random.Seq(32),
++	"secret":                      rand.Text(),
+ 	"webBasePath":                 "/",
+ 	"sessionMaxAge":               "60",
+ 	"pageSize":                    "50",
+diff --git a/web/service/user.go b/web/service/user.go
+index ff5b8531..f0b04f52 100644
+--- a/web/service/user.go
++++ b/web/service/user.go
+@@ -79,16 +79,6 @@ func (s *UserService) UpdateUser(id int, username string, password string) error
+ 		return err
+ 	}
+ 
+-	twoFactorEnable, err := s.settingService.GetTwoFactorEnable()
+-	if err != nil {
+-		return err
+-	}
+-
+-	if twoFactorEnable {
+-		s.settingService.SetTwoFactorEnable(false)
+-		s.settingService.SetTwoFactorToken("")
+-	}
+-
+ 	return db.Model(model.User{}).
+ 		Where("id = ?", id).
+ 		Updates(map[string]any{"username": username, "password": hashedPassword}).
+diff --git a/web/session/session.go b/web/session/session.go
+index 13aedad8..309f85d7 100644
+--- a/web/session/session.go
++++ b/web/session/session.go
+@@ -1,65 +1,92 @@
+ package session
+ 
+ import (
+-	"encoding/gob"
++    "crypto/sha256"
++    "crypto/subtle"
++    "encoding/gob"
++    "net/http"
+ 
+-	"x-ui/database/model"
++    "x-ui/database"
++    "x-ui/database/model"
+ 
+-	"github.com/gin-contrib/sessions"
+-	"github.com/gin-gonic/gin"
++    "github.com/gin-contrib/sessions"
++    "github.com/gin-gonic/gin"
+ )
+ 
+ const (
+-	loginUserKey = "LOGIN_USER"
+-	defaultPath  = "/"
++    loginUserKey = "LOGIN_USER"
++    defaultPath = "/"
+ )
+ 
++// LoginToken deliberately omits the bcrypt password hash and any user record.
++// CredentialVersion invalidates existing sessions when the password changes.
++type LoginToken struct {
++    UserID int
++    CredentialVersion [32]byte
++}
++
+ func init() {
+-	gob.Register(model.User{})
++    gob.Register(LoginToken{})
++    // Support decoding old signed cookies only to invalidate their sessions safely.
++    gob.Register(model.User{})
+ }
+ 
+ func SetLoginUser(c *gin.Context, user *model.User) {
+-	if user == nil {
+-		return
+-	}
+-	s := sessions.Default(c)
+-	s.Set(loginUserKey, *user)
++    if user == nil {
++        return
++    }
++    sessions.Default(c).Set(loginUserKey, LoginToken{
++        UserID: user.Id,
++        CredentialVersion: sha256.Sum256([]byte(user.Password)),
++    })
+ }
+ 
+ func SetMaxAge(c *gin.Context, maxAge int) {
+-	s := sessions.Default(c)
+-	s.Options(sessions.Options{
+-		Path:     defaultPath,
+-		MaxAge:   maxAge,
+-		HttpOnly: true,
+-	})
++    sessions.Default(c).Options(sessions.Options{
++        Path: defaultPath,
++        MaxAge: maxAge,
++        HttpOnly: true,
++        SameSite: http.SameSiteLaxMode,
++        Secure: c.Request.TLS != nil,
++    })
+ }
+ 
+ func GetLoginUser(c *gin.Context) *model.User {
+-	s := sessions.Default(c)
+-	obj := s.Get(loginUserKey)
+-	if obj == nil {
+-		return nil
+-	}
+-	user, ok := obj.(model.User)
+-	if !ok {
+-
+-		s.Delete(loginUserKey)
+-		return nil
+-	}
+-	return &user
++    s := sessions.Default(c)
++    obj := s.Get(loginUserKey)
++    if obj == nil {
++        return nil
++    }
++    token, ok := obj.(LoginToken)
++    if !ok || token.UserID <= 0 {
++        s.Delete(loginUserKey)
++        return nil
++    }
++    user := &model.User{}
++    if err := database.GetDB().First(user, token.UserID).Error; err != nil {
++        s.Delete(loginUserKey)
++        return nil
++    }
++    version := sha256.Sum256([]byte(user.Password))
++    if subtle.ConstantTimeCompare(version[:], token.CredentialVersion[:]) != 1 {
++        s.Delete(loginUserKey)
++        return nil
++    }
++    return user
+ }
+ 
+ func IsLogin(c *gin.Context) bool {
+-	return GetLoginUser(c) != nil
++    return GetLoginUser(c) != nil
+ }
+ 
+ func ClearSession(c *gin.Context) {
+-	s := sessions.Default(c)
+-	s.Clear()
+-	s.Options(sessions.Options{
+-		Path:     defaultPath,
+-		MaxAge:   -1,
+-		HttpOnly: true,
+-	})
++    s := sessions.Default(c)
++    s.Clear()
++    s.Options(sessions.Options{
++        Path: defaultPath,
++        MaxAge: -1,
++        HttpOnly: true,
++        SameSite: http.SameSiteLaxMode,
++        Secure: c.Request.TLS != nil,
++    })
+ }
+diff --git a/web/session/session_test.go b/web/session/session_test.go
+new file mode 100644
+index 00000000..2cbb1acf
+--- /dev/null
++++ b/web/session/session_test.go
+@@ -0,0 +1,88 @@
++package session
++
++import (
++    "net/http"
++    "net/http/httptest"
++    "path/filepath"
++    "testing"
++
++    "x-ui/database"
++    "x-ui/database/model"
++    "x-ui/util/crypto"
++
++    "github.com/gin-contrib/sessions"
++    "github.com/gin-contrib/sessions/cookie"
++    "github.com/gin-gonic/gin"
++)
++
++func TestSessionTokenDoesNotStorePasswordHashAndExpiresOnPasswordChange(t *testing.T) {
++    if err := database.InitDB(filepath.Join(t.TempDir(), "test.db")); err != nil {
++        t.Fatalf("init test db: %v", err)
++    }
++    defer database.CloseDB()
++
++    var initialUser model.User
++    if err := database.GetDB().First(&initialUser).Error; err != nil {
++        t.Fatalf("get initial user: %v", err)
++    }
++
++    gin.SetMode(gin.TestMode)
++    router := gin.New()
++    store := cookie.NewStore([]byte("0123456789abcdef0123456789abcdef"))
++    router.Use(sessions.Sessions("3x-ui", store))
++
++    router.POST("/login", func(c *gin.Context) {
++        SetMaxAge(c, 3600)
++        SetLoginUser(c, &initialUser)
++        if _, ok := sessions.Default(c).Get(loginUserKey).(LoginToken); !ok {
++            t.Error("session contains more than the minimal login token")
++        }
++        if err := sessions.Default(c).Save(); err != nil {
++            t.Errorf("save login: %v", err)
++        }
++        c.Status(http.StatusNoContent)
++    })
++    router.GET("/whoami", func(c *gin.Context) {
++        user := GetLoginUser(c)
++        if user == nil {
++            c.Status(http.StatusUnauthorized)
++            return
++        }
++        c.Status(http.StatusNoContent)
++    })
++
++    loginRecorder := httptest.NewRecorder()
++    router.ServeHTTP(loginRecorder, httptest.NewRequest(http.MethodPost, "/login", nil))
++    if loginRecorder.Code != http.StatusNoContent {
++        t.Fatalf("login returned %d", loginRecorder.Code)
++    }
++    cookies := loginRecorder.Result().Cookies()
++    if len(cookies) != 1 {
++        t.Fatalf("expected a session cookie; got %d", len(cookies))
++    }
++    if cookies[0].HttpOnly != true || cookies[0].SameSite != http.SameSiteLaxMode {
++        t.Fatal("session cookie missing HttpOnly / SameSite=Lax")
++    }
++
++    access := func() int {
++        req := httptest.NewRequest(http.MethodGet, "/whoami", nil)
++        req.AddCookie(cookies[0])
++        recorder := httptest.NewRecorder()
++        router.ServeHTTP(recorder, req)
++        return recorder.Code
++    }
++    if got := access(); got != http.StatusNoContent {
++        t.Fatalf("valid session returned %d", got)
++    }
++
++    updated, err := crypto.HashPasswordAsBcrypt("different-long-secret")
++    if err != nil {
++        t.Fatal(err)
++    }
++    if err := database.GetDB().Model(&model.User{}).Where("id = ?", initialUser.Id).Update("password", updated).Error; err != nil {
++        t.Fatal(err)
++    }
++    if got := access(); got != http.StatusUnauthorized {
++        t.Fatalf("old session after password change returned %d; want 401", got)
++    }
++}
+diff --git a/web/web.go b/web/web.go
+index 35ccec70..2c140447 100644
+--- a/web/web.go
++++ b/web/web.go
+@@ -157,6 +157,12 @@ func (s *Server) initRouter() (*gin.Engine, error) {
+ 	}
+ 
+ 	engine := gin.Default()
++	engine.Use(func(c *gin.Context) {
++		c.Header("X-Content-Type-Options", "nosniff")
++		c.Header("X-Frame-Options", "DENY")
++		c.Header("Referrer-Policy", "no-referrer")
++		c.Next()
++	})
+ 
+ 	webDomain, err := s.settingService.GetWebDomain()
+ 	if err != nil {
+@@ -180,6 +186,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
+ 	assetsBasePath := basePath + "assets/"
+ 
+ 	store := cookie.NewStore(secret)
++	store.Options(sessions.Options{Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+ 	engine.Use(sessions.Sessions("3x-ui", store))
+ 	engine.Use(func(c *gin.Context) {
+ 		c.Set("base_path", basePath)
+@@ -341,13 +348,14 @@ func (s *Server) Start() (err error) {
+ 		if err == nil {
+ 			c := &tls.Config{
+ 				Certificates: []tls.Certificate{cert},
++				MinVersion: tls.VersionTLS12,
+ 			}
+ 			listener = network.NewAutoHttpsListener(listener)
+ 			listener = tls.NewListener(listener, c)
+ 			logger.Info("Web server running HTTPS on", listener.Addr())
+ 		} else {
+-			logger.Error("Error loading certificates:", err)
+-			logger.Info("Web server running HTTP on", listener.Addr())
++			listener.Close()
++			return err // Fail closed: never downgrade a configured HTTPS panel.
+ 		}
+ 	} else {
+ 		logger.Info("Web server running HTTP on", listener.Addr())
+@@ -356,6 +364,9 @@ func (s *Server) Start() (err error) {
+ 
+ 	s.httpServer = &http.Server{
+ 		Handler: engine,
++		ReadHeaderTimeout: 10 * time.Second,
++		IdleTimeout: 120 * time.Second,
++		MaxHeaderBytes: 1 << 20,
+ 	}
+ 
+ 	go func() {

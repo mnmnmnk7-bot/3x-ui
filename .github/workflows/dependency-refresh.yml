@@ -1,3 +1,4 @@
+# Retry: adapt obsolete shadowsocks CipherType_NONE enum to CipherType_UNKNOWN
 name: One-time dependency refresh (maintenance branch)
 
 on:

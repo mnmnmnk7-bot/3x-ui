@@ -2,12 +2,11 @@ name: Build and Release 3x-ui
 
 on:
   workflow_dispatch:
-  release:
-    types: [published]
   pull_request:
     paths: ['go.mod', 'go.sum', '**/*.go', 'DockerInit.sh', '.github/workflows/release.yml']
   push:
     branches: [main]
+    tags: ['v*']
     paths:
       - '**/*.go'
       - '**/*.js'
@@ -103,7 +102,7 @@ jobs:
           retention-days: 14
 
   publish:
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-24.04
     permissions:
@@ -122,6 +121,9 @@ jobs:
       - name: Attach binary archives and checksums
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v2026.11.{0}', github.run_number) }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
           files: |
             dist/*.tar.gz
             dist/SHA256SUMS

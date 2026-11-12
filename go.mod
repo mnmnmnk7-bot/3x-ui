@@ -2,7 +2,7 @@ module x-ui
 
 go 1.27
 
-// Build with a patched toolchain while retaining Go 1.24 module compatibility.
+// Build with patched Go 1.27.4; dependency updates require Go 1.27.
 toolchain go1.27.4
 
 require (

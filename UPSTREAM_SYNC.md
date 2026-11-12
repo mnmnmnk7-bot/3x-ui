@@ -8,14 +8,14 @@
 
 - 移除登入失敗密碼外洩。
 - 新安裝使用隨機初始管理密碼。
-- 建置 Go toolchain 更新至 1.27.4（保留 module 最低需求）。
+- 建置 Go toolchain 更新至 1.27.4，Go module 最低需求同步更新為 1.27。
 - Release / Docker 打包的 **外部** Xray 執行檔更新至 v26.11.9。
 - 重建 GitHub Actions、GHCR 發布、Dependabot 與漏洞掃描。
 
 ## 尚待整合測試的上游同步
 
-- `go.mod` 中的 `github.com/xtls/xray-core` 仍是 v1.250608.0；它是 Go 模組，不等於打包的 `xray` 執行檔。需在新的 Go module update PR 中逐步升級，更新 `go.sum` 並測試設定產生/JSON 格式/資料庫相容性。
-- Gin / HTTP middleware / gRPC 等相依套件由 Dependabot 提出更新 PR，必須通過 CI 與手動測試才合併。
+- `go.mod` 中的 `github.com/xtls/xray-core` 已升級至 2026-11-04 的上游提交，`go.sum` 已重新產生；Go CI 與 govulncheck 通過，但尚需對設定產生、JSON 格式、資料庫相容性、入站／出站進行實機整合測試。
+- Gin、gRPC、HTTP middleware 與安全掃描指出的 8 個模組已更新並通過 build/test/vet/govulncheck；後續版本仍由 Dependabot 提出 PR，需通過 CI 與手動測試才合併。
 - 上游 2026 版本引入的新協定、API/DB migrations、訂閱格式、安全功能需獨立移植，並對原本中文優化版逐項比對。
 - 因缺少真實部署環境，不能宣稱新 Xray binary 與舊版 Go 模組的設定輸出已全面相容。
 
